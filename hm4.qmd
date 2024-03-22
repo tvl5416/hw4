@@ -271,7 +271,7 @@ Read the data from the following URL as a tibble in R. Preprocess the data such 
 ```{R}
 url <- "https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv"
 
-df <- ... # Insert your code here
+df <- read_csv(url)
 ```
 
 
@@ -282,9 +282,10 @@ df <- ... # Insert your code here
 
 Visualize the correlation matrix of all numeric columns in `df` using `corrplot()`
 
-```R
-df %>% ... # Insert your code here
+```{R}
+df %>% select_if(is.numeric) %>% cor() %>% corrplot(method = "circle")
 ```
+
 
 
 
@@ -301,11 +302,20 @@ Fit a logistic regression model to predict the probability of surviving the tita
 * `# siblings`
 * `# parents`
 
+```{R}
+# Rename columns to remove spaces and special characters
+df <- df %>%
+  rename(y = Survived,
+         siblings_spouses = 'Siblings/Spouses Aboard',
+         parents_children = 'Parents/Children Aboard') %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(c(Pclass, y), as.factor)) 
 
-```R
-full_model <- ... # Insert your code here
+full_model <- glm(y ~ Pclass + Sex + Age + Fare + siblings_spouses + parents_children, data = df, family = "binomial")
+
 summary(full_model)
 ```
+
 
 ---
 
@@ -318,6 +328,7 @@ Provide an interpretation for the slope and intercept terms estimated in `full_m
 Recall the definition of logistic regression from the lecture notes, and also recall how we interpreted the slope in the linear regression model (particularly when the covariate was categorical).
 :::
 
+The intercept in full_model represents the log-odds of survival for a passenger in the baseline category (1st class, female, with zero siblings/spouses and parents/children aboard, and with zero fare and age), estimated to be 4.109777. A positive coefficient, such as for the intercept, indicates higher log-odds of survival, which means a higher probability of survival. For categorical variables like Pclass and Sex, the coefficients (e.g., Pclass2, Pclass3, Sexmale) represent the change in log-odds of survival relative to the baseline category (1st class, female); for example, being male (Sexmale) decreases the log-odds of survival by 2.756710 compared to being female. In terms of odds ratios, exp(-2.756710) for Sexmale indicates that being male is associated with a decrease in the odds of survival by a factor of about 0.064 compared to being female, holding other variables constant.
 
 <br><br><br><br>
 <br><br><br><br>
