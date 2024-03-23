@@ -441,13 +441,18 @@ controls <- trainControl(method = "cv", number = 5, summaryFunction = twoClassSu
 Now, using `control`, perform $5$-fold cross validation using `caret::train()` to select the optimal $\lambda$ parameter for LASSO with logistic regression. 
 
 Take the search grid for $\lambda$ to be in $\{ 2^{-20}, 2^{-19.5}, 2^{-19}, \dots, 2^{-0.5}, 2^{0} \}$.
+```{R}
+df$Sex <- as.factor(ifelse(df$Sex == "male", 0, 1))
+df$y <- factor(df$y)
+levels(df$y) <- make.names(levels(df$y))
 
+```
 
 ```{R}
 
 lasso_fit <- train(
-  x = df1 %>% select(Pclass, Sex, Age, Fare, siblings_spouses, parents_children) %>% as.data.frame(),
-  y = df1$y,
+  x = df %>% select(Pclass, Sex, Age, Fare, siblings_spouses, parents_children) %>% as.data.frame(),
+  y = df$y,
   method = 'glmnet',
   trControl = controls, 
   tuneGrid = expand.grid(
