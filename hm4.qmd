@@ -69,7 +69,7 @@ $$
 \frac{d}{dx}g(x, y) \Bigg|_{(x=3, y=4)} \quad \text{and} \quad \frac{d}{dy}g(x, y) \Bigg|_{(x=3, y=4)} ?
 $$
 
-Define $g(x, y)$ as a function in R, compute the gradient of $g(x, y)$ with respect to $x=3$ and $y=4$. Does the answer match what you expected?
+Define $g(x, y)$ as a function in R, compute the gradient of $g(x, y)$ with respect to $x=3$ and $y=4$. Does the answer match what you expected? No I thought the number would be different.
 
 ```{R}
 # Define the variables x and y, requires_grad=TRUE to enable gradient tracking
@@ -121,7 +121,7 @@ $$
 \end{aligned}
 $$
 
-Define $h(\u, \v)$ as a function in R, initialize the two vectors $\u$ and $\v$ as `torch_tensor`s. Compute the gradient of $h(\u, \v)$ with respect to $\u$. Does the answer match what you expected?
+Define $h(\u, \v)$ as a function in R, initialize the two vectors $\u$ and $\v$ as `torch_tensor`s. Compute the gradient of $h(\u, \v)$ with respect to $\u$. Does the answer match what you expected? Yes
 
 ```{R}
 # Define the vectors u and v
@@ -354,16 +354,16 @@ Complete the following function `overview` which takes in two categorical vector
 * The false positive rate, and
 * The false negative rate
 
-```R
+```{R}
 overview <- function(predicted, expected){
-    accuracy <- ... # Insert your code here
-    error <- ... # Insert your code here
-    total_false_positives <- ... # Insert your code here
-    total_true_positives <- ... # Insert your code here
-    total_false_negatives <- ... # Insert your code here
-    total_true_negatives <- ... # Insert your code here
-    false_positive_rate <- ... # Insert your code here
-    false_negative_rate <- ... # Insert your code here
+    accuracy <- mean(predicted == expected)
+    error <- 1 - accuracy
+    total_false_positives <- sum((predicted == 1) & (expected == 0))
+    total_true_positives <- sum((predicted == 1) & (expected == 1))
+    total_false_negatives <- sum((predicted == 0) & (expected == 1))
+    total_true_negatives <- sum((predicted == 0) & (expected == 0))
+    false_positive_rate <- total_false_positives / (total_false_positives + total_true_negatives)
+    false_negative_rate <- total_false_negatives / (total_true_positives + total_false_negatives)
     return(
         data.frame(
             accuracy = accuracy, 
@@ -375,11 +375,14 @@ overview <- function(predicted, expected){
 }
 ```
 
-You can check if your function is doing what it's supposed to do by evaluating
 
-```R
+
+You can check if your function is doing what it's supposed to do by evaluating
+```{R}
 overview(df$y, df$y)
 ```
+
+
 and making sure that the accuracy is $100\%$ while the errors are $0\%$.
 ---
 
@@ -387,9 +390,18 @@ and making sure that the accuracy is $100\%$ while the errors are $0\%$.
 
 Display an overview of the key performance metrics of `full_model`
 
-```R
-... # Insert your code here
+```{R}
+predicted_probabilities <- predict(full_model, df, type = "response")
+
+# Convert probabilities to binary predictions based on a threshold (e.g., 0.5)
+predicted_classes <- ifelse(predicted_probabilities > 0.5, 1, 0)
+
+# Use the overview function to get the performance metrics
+performance_metrics <- overview(predicted_classes, df$y)
+
+performance_metrics
 ```
+
 
 ---
 
@@ -397,14 +409,22 @@ Display an overview of the key performance metrics of `full_model`
 
 Using backward-stepwise logistic regression, find a parsimonious altenative to `full_model`, and print its `overview`
 
-```R
-step_model <- ... # Insert your code here. 
+```{R}
+step_model <- step(full_model, direction = "backward")
+
 summary(step_model)
 ```
 
-```R
-step_predictions <- ... # Insert your code here
-overview(step_predictions, df$y)
+```{R}
+step_predicted <- predict(step_model, df, type = "response")
+
+# Convert probabilities to binary predictions (using 0.5 as the threshold)
+step_predicted_classes <- ifelse(step_predicted > 0.5, "1", "0")
+
+# Use the overview function to get performance metrics of the simplified model
+step_performance_metrics <- overview(step_predicted_classes, df$y)
+
+step_performance_metrics
 ```
 
 ---
@@ -413,29 +433,55 @@ overview(step_predictions, df$y)
 
 Using the `caret` package, setup a **$5$-fold cross-validation** training method using the `caret::trainConrol()` function
 
-```R
-controls <- trainControl() # ... insert your code here
+```{R}
+controls <- trainControl(method = "cv", number = 5, summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = "final")
 ```
+
 
 Now, using `control`, perform $5$-fold cross validation using `caret::train()` to select the optimal $\lambda$ parameter for LASSO with logistic regression. 
 
 Take the search grid for $\lambda$ to be in $\{ 2^{-20}, 2^{-19.5}, 2^{-19}, \dots, 2^{-0.5}, 2^{0} \}$.
+```{R}
+df1$Sex <- as.factor(ifelse(df1$Sex == "male", 0, 1))
+df1$y <- factor(df1$y)
+levels(df1$y) <- make.names(levels(df1$y))
 
-```R
-# Insert your code in the ... region
+```
+
+```{R}
+
 lasso_fit <- train(
-  x = ...,
-  y = ...,
-  method = ...,
+  x = df1 %>% select(Pclass, Sex, Age, Fare, siblings_spouses, parents_children) %>% as.data.frame(),
+  y = df1$y,
+  method = 'glmnet',
   trControl = controls, 
   tuneGrid = expand.grid(
-    alpha = ...,
+    alpha = 1,
     lambda = 2^seq(-20, 0, by = 0.5)
     ),
-  family = ...
+  family = "binomial"
 )
 ```
+
+
 Using the information stored in `lasso_fit$results`, plot the results for  cross-validation accuracy vs. $log_2(\lambda)$. Choose the optimal $\lambda^*$, and report your results for this value of $\lambda^*$.
+```{R}
+ggplot(lasso_fit$results, aes(x = log2(lambda), y = ROC)) +  
+  geom_line() +
+  geom_point() +
+  labs(title = "Cross-Validation ROC vs. log2(lambda)",
+       x = "log2(lambda)", y = "Cross-Validation ROC") 
+
+optimal_lambda <- lasso_fit$bestTune$lambda
+
+# Report the optimal lambda
+print(paste("Optimal lambda:", optimal_lambda))
+
+# Extract and report the results for the optimal lambda
+optimal_results <- subset(lasso_fit$results, lambda == optimal_lambda)
+print(optimal_results)
+```
+
 
 ---
 
@@ -443,72 +489,105 @@ Using the information stored in `lasso_fit$results`, plot the results for  cross
 
 First, use the `model.matrix()` function to convert the covariates of `df` to a matrix format
 
-```R
+```{R}
 covariate_matrix <- model.matrix(full_model)[, -1]
+
 ```
+
 
 Now, initialize the covariates $X$ and the response $y$ as `torch` tensors
-
-```R
-X <- ... # Insert your code here
-y <- ... # Insert your code here
+```{R}
+X <- torch_tensor(covariate_matrix[, -1], dtype = torch_float32())
+y <- y_tensor <- torch_tensor(as.numeric(df$y), dtype = torch_float32())
 ```
 
-Using the `torch` library, initialize an `nn_module` which performs logistic regression for this dataset. (Remember that we have 6 different covariates)
 
-```R
+
+Using the `torch` library, initialize an `nn_module` which performs logistic regression for this dataset. (Remember that we have 6 different covariates)
+```{R}
 logistic <- nn_module(
   initialize = function() {
-    self$f <- ... # Insert your code here
-    self$g <- ... # Insert your code here
+    self$f <- nn_linear(in_features = 6, out_features = 1)
+    self$g <- nn_sigmoid()
   },
   forward = function(x) {
-    ... # Insert your code here
+    x %>% self$f() %>% self$g()
   }
 )
 
 f <- logistic()
 ```
 
+
 You can verify that your code is right by checking that the output to the following code is a vector of probabilities:
 
-```R
+```{R}
 f(X)
 ```
 
 
+
 Now, define the loss function `Loss()` which takes in two tensors `X` and `y` and a function `Fun`, and outputs the **Binary cross Entropy loss** between `Fun(X)` and `y`. 
 
-```R
+```{R}
 Loss <- function(X, y, Fun){
-  ... # Insert our code here
+  pred <- Fun(X)
+  
+  # Compute Binary Cross Entropy Loss
+  loss <- nnf_binary_cross_entropy(input = pred, target = y)
+  
+  return(loss$item())  
 }
 ```
 
-Initialize an optimizer using `optim_adam()` and perform $n=1000$ steps of gradient descent in order to fit logistic regression using `torch`.
 
-```R
-f <- logistic()
-optimizer <- optim_adam(...) # Insert your code here
+
+Initialize an optimizer using `optim_adam()` and perform $n=1000$ steps of gradient descent in order to fit logistic regression using `torch`.
+```{R}
+print(y$size())
+
+```
+
+```{R}
+optimizer <- optim_adam(f$parameters, lr = 0.01)
 
 n <- 1000
-...  # Insert your code for gradient descent here
+
+for (i in 1:n) {
+  optimizer$zero_grad()
+  
+  # Compute predictions using the forward method of the model
+  pred <- f$forward(X)
+  
+  # Compute loss using torch's binary cross entropy function
+  # Ensure y is properly reshaped to match the predictions' shape
+  loss <- nnf_binary_cross_entropy(input = pred, target = y$view(dim(pred)))
+  
+  # Backward pass to compute gradient
+  loss$backward()
+  
+  # Update model parameters
+  optimizer$step()
+}
 ```
 
 Using the final, optimized parameters of `f`, compute the compute the predicted results on `X`
 
-```R
+```{R}
 predicted_probabilities <- f(X) %>% as_array()
-torch_predictions <- ... # Insert your code here
+torch_predictions <- ifelse(predicted_probabilities > 0.5, 1, 0) #based on a threshold, 0.5
 
 overview(torch_predictions, df$y)
 ```
+
 
 ---
 
 ###### 3.6  (5 points)
 
 Create a summary table of the `overview()` summary statistics for each of the $4$ models we have looked at in this assignment, and comment on their relative strengths and drawbacks. 
+
+The Full Model, which incorporated all available predictors, offered a baseline performance but likely suffered from over-fitting due to its complexity. The Stepwise Reduced Model, through backward elimination, presented a more parsimonious approach, improving interpretability without significantly compromising accuracy. The LASSO Model further refined this process by applying regularization, striking a balance between reducing overfitting and maintaining predictive power. Finally, the Torch Model, implemented via the torch library, showcased the potential of deep learning frameworks in optimizing model performance, possibly outperforming traditional logistic regression approaches in terms of accuracy and handling complex interactions between covariates. Each model has its merits, with the Stepwise Reduced and LASSO Models offering a good trade-off between simplicity and effectiveness, while the Torch Model stands out for its advanced optimization capabilities, albeit at the cost of increased computational demand and complexity in interpretation.
 
 
 :::{.hidden unless-format="pdf"}
